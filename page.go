@@ -19,6 +19,7 @@ type PageService interface {
 	Create(context.Context, *PageCreateRequest) (*Page, error)
 	Get(context.Context, PageID) (*Page, error)
 	Update(context.Context, PageID, *PageUpdateRequest) (*Page, error)
+	WithToken(string) (PageService, func())
 }
 
 type PageClient struct {
@@ -71,6 +72,26 @@ type PageCreateRequest struct {
 	Icon *Icon `json:"icon,omitempty"`
 	// The cover image of the new page, represented as a file object.
 	Cover *Image `json:"cover,omitempty"`
+}
+
+// WithToken temporarily uses a token for the request.
+// Right now you have to initialize a new client every time you need to use another token
+// There is also the url parsing bit in the client initialization. I haven't tested at decent scale yet
+// but things like that look like they'd cause a leak when enough objects are created. or just take enough cpu cycle
+// E.g you have to write to 100 pages at the same time. 100 objects that have to be cleaned up. 100 url parsing of the same url (which
+// could have been cached somehow)
+//
+// # Please make sure to call the clean up function so the old token is returned
+//
+// TODO(adelowo): Ideally this should be reworked somehow to be cleaner but i have a tight deadline.
+// I might come back to this and implement in a cleaner method then submit patch to upstream
+func (p *PageClient) WithToken(token string) (PageService, func()) {
+	oldToken := p.apiClient.Token
+	p.apiClient.Token = Token(token)
+
+	return p, func() {
+		p.apiClient.Token = oldToken
+	}
 }
 
 // Retrieves a Page object using the ID specified.
